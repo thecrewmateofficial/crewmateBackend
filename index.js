@@ -286,6 +286,28 @@ app.post("/api/v1/auth/login", async (req, res) => {
     }
   });
 
+  app.get("/api/v1/public/plans", async (req, res) => {
+    try {
+      const plans = await prisma.plan.findMany({
+        where: {
+          isActive: true,
+        },
+        orderBy: {
+          monthlyPrice: "asc",
+        },
+      });
+  
+      res.status(200).json({
+        success: true,
+        plans,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  });
 
   app.get("/api/v1/plans/:planId", auth("SUPER_ADMIN"), async (req, res) => {
     try {
@@ -316,7 +338,6 @@ app.post("/api/v1/auth/login", async (req, res) => {
     }
   });
 
-
   app.put("/api/v1/plans/:planId", auth("SUPER_ADMIN"), async (req, res) => {
     try {
       const { planId } = req.params;
@@ -340,7 +361,6 @@ app.post("/api/v1/auth/login", async (req, res) => {
       });
     }
   });
-
 
   app.delete("/api/v1/plans/:planId", auth("SUPER_ADMIN"), async (req, res) => {
     try {
@@ -368,7 +388,7 @@ app.post("/api/v1/auth/login", async (req, res) => {
     }
   });
 
-  
+
 
 app.listen(9001,()=>(
     console.log("Crewmate Server Started.....")
