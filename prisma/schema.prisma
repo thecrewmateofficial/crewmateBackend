@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// prisma/schema.prisma
+datasource db {
+  provider  = "postgresql"
+  url  	    = env("DATABASE_URL")
+  // uncomment next line if you use Prisma <5.10
+  // directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  STAFF
+  USER
+}
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model Tenant {
+  tenantId           String   @id @default(cuid())
+  // Company Information
+  name               String
+  slug               String   @unique
+  // Branding
+  logo               String?
+  favicon            String?
+  primaryColor       String?
+  // Default URLs
+  adminUrl           String   @unique
+  appUrl             String   @unique
+  // Custom Domains
+  customAdminUrl     String?  @unique
+  customAppUrl       String?  @unique
+  domainVerified     Boolean  @default(false)
+  // Status
+  status             TenantStatus @default(TRIAL)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  users              User[]
+  subscription       Subscription?
+}
+
+model User {
+  userId             String   @id @default(cuid())
+// NULL for SUPER_ADMIN
+  tenantId           String?
+  tenant             Tenant?  @relation(fields: [tenantId],references: [tenantId])
+  name               String
+  email              String   @unique
+  password           String
+  role               Role
+  isActive           Boolean  @default(true)
+  lastLogin          DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Plan {
+  planId             String   @id @default(cuid())
+  name               String   @unique
+  description        String?
+  monthlyPrice       Float
+  yearlyPrice        Float?
+  trialDays          Int      @default(7)
+  maxStaff           Int
+  maxUsers           Int
+  whatsappIntegration Boolean @default(false)
+  apiAccess           Boolean @default(true)
+  prioritySupport     Boolean @default(true)
+   // Storage
+  storageLimitGB     Int
+  customDomain       Boolean  @default(false)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  subscriptions      Subscription[]
+}
+
+model Subscription {
+  subscriptionId     String   @id @default(cuid())
+  tenantId           String   @unique
+  tenant             Tenant   @relation(fields: [tenantId],references: [tenantId])
+  planId             String
+  plan               Plan     @relation(fields: [planId],references: [planId])
+  status             SubscriptionStatus @default(TRIAL)
+  startDate          DateTime
+  endDate            DateTime
+  autoRenew          Boolean  @default(true)
+  paymentProvider    String?
+  paymentReference   String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
