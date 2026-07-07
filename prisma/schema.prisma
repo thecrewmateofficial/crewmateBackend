@@ -28,31 +28,66 @@ enum TenantStatus {
 enum SubscriptionStatus {
   TRIAL
   ACTIVE
+  PAST_DUE
   EXPIRED
   CANCELLED
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+
+model Registration {
+  registrationId                    String   @id @default(cuid())
+  name                  String
+  email                 String   @unique
+  companyName           String  
+  companySlug           String   @unique
+  otp                   String?
+  otpVerified           Boolean  @default(false)
+  selectedPlanId        String?
+  selectedBillingCycle  BillingCycle?
+  paymentAuthenticatedCompleted      Boolean  @default(false)
+  razorpaySubscriptionId String?
+  expiresAt             DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }
 
 model Tenant {
   tenantId           String   @id @default(cuid())
   // Company Information
   name               String
-  slug               String   @unique
+  email              String   @unique
+ companyName           String  
+ companySlug           String   @unique
   // Branding
   logo               String?
   favicon            String?
   primaryColor       String?
   // Default URLs
-  adminUrl           String   @unique
-  appUrl             String   @unique
+  adminUrl           String   
+  appUrl             String   
   // Custom Domains
-  customAdminUrl     String?  @unique
-  customAppUrl       String?  @unique
+  customAdminUrl     String?  
+  customAppUrl       String?  
   domainVerified     Boolean  @default(false)
   // Status
   status             TenantStatus @default(TRIAL)
   isActive           Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  selectedPlanId       String?
+  selectedBillingCycle BillingCycle?
+  otp                String?
+  otpVerified        Boolean @default(false)
+  paymentAuthenticatedCompleted  Boolean  @default(false)
+  signupAt          DateTime?
+  paymentAuthenticatedAt      DateTime @default(now())
+
+
   users              User[]
   subscription       Subscription?
 }
@@ -73,24 +108,27 @@ model User {
 }
 
 model Plan {
-  planId             String   @id @default(cuid())
-  name               String   @unique
-  description        String?
-  monthlyPrice       Float
-  yearlyPrice        Float?
-  trialDays          Int      @default(7)
-  maxStaff           Int
-  maxUsers           Int
+  planId              String   @id @default(cuid())
+  name                String   @unique
+  description         String?
+  monthlyPrice        Float
+  yearlyPrice         Float?
+  trialDays           Int      @default(7)
+  maxStaff            Int
+  maxUsers            Int
   whatsappIntegration Boolean @default(false)
   apiAccess           Boolean @default(true)
   prioritySupport     Boolean @default(true)
    // Storage
-  storageLimitGB     Int
-  customDomain       Boolean  @default(false)
-  isActive           Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  subscriptions      Subscription[]
+  storageLimitGB      Int
+  customDomain        Boolean  @default(false)
+  // Razorpay Plan IDs
+  razorpayMonthlyPlanId   String?
+  razorpayYearlyPlanId    String?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  subscriptions       Subscription[]
 }
 
 model Subscription {
@@ -105,6 +143,8 @@ model Subscription {
   autoRenew          Boolean  @default(true)
   paymentProvider    String?
   paymentReference   String?
+  razorpayCustomerId      String?
+  razorpaySubscriptionId  String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }
