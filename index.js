@@ -465,8 +465,7 @@ app.post("/api/v1/auth/login", async (req, res) => {
         .replace(/[^a-z0-9]/g, "");
   
       // Check email already exists in Tenant
-      const existingTenantEmail =
-        await prisma.tenant.findUnique({
+      const existingTenantEmail = await prisma.tenant.findUnique({
           where: {
             email
           }
@@ -480,8 +479,7 @@ app.post("/api/v1/auth/login", async (req, res) => {
       }
   
       // Check slug already used by another tenant
-      const existingTenantSlug =
-        await prisma.tenant.findUnique({
+      const existingTenantSlug = await prisma.tenant.findUnique({
           where: {
             companySlug: slug
           }
@@ -778,7 +776,7 @@ const subscription = await razorpay.subscriptions.create(
           where: { email },
           data: {
             razorpaySubscriptionId: subscription.id,
-            paymentCompleted: false
+            paymentAuthenticatedCompleted: false
           }
         });
   
