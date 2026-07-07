@@ -800,98 +800,260 @@ const subscription = await razorpay.subscriptions.create(
     }
   });
 
-  app.post('/api/v1/webhook', async (req, res) => {
+  app.post("/api/v1/webhook", async (req, res) => {
     try {
-      // ... signature verification ...
-            const signature = req.headers['x-razorpay-signature'];
-            const expectedSignature = crypto
-              .createHmac('sha256', "t8TasPW1A0zauajyfr0w2YQy")
-              .update(JSON.stringify(req.body))
-              .digest('hex');
-        
-            if (expectedSignature !== signature) {
-              console.log('❌ Invalid webhook signature');
-              return res.status(400).json({ 
-                success: false, 
-                message: 'Invalid signature' 
-              });
-            }
-        
-            const event = req.body;
-            console.log('📨 Webhook Received:', event.event);
-      
-            if (event.event === "subscription.authenticated") {
-
-              const razorpaySubscription =
-                event.payload.subscription.entity;
-            
-              const registration =
-                await prisma.registration.findFirst({
-                  where: {
-                    razorpaySubscriptionId:
-                      razorpaySubscription.id,
-                  },
-                });
-            
-              if (!registration) {
-                return res.status(200).json({
-                  success: true,
-                  message: "Registration not found",
-                });
-              }
-            
-              // Prevent duplicate tenant creation
-              const existingTenant =
-                await prisma.tenant.findUnique({
-                  where: {
-                    email: registration.email,
-                  },
-                });
-            
-              if (existingTenant) {
-                return res.status(200).json({
-                  success: true,
-                  message: "Tenant already exists",
-                });
-              }
-            
-              const tenant =
-                await prisma.tenant.create({
-                  data: {
-                    name: registration.name,
-                    email: registration.email,
-                    companyName: registration.companyName,
-                    companySlug: registration.companySlug,
-                    adminUrl: `${registration.companySlug}.admin.crewmate.in`,
-                    appUrl: `${registration.companySlug}.app.crewmate.in`,
-                    selectedPlanId: registration.selectedPlanId,
-                    selectedBillingCycle:  registration.selectedBillingCycle,
-                    status: "TRIAL",
-                    paymentAuthenticatedCompleted: true,
-                    signupAt:registration.createdAt,
-                    otpVerified: true,
-                    isActive: true,
-                  },
-                });
-            
-              console.log(
-                "✅ Tenant Created:",
-                tenant.tenantId
-              );
-            
-              // Optional: Mark registration completed
-              await prisma.registration.delete({
-                where: {
+      // Verify Webhook Signature
+      const signature = req.headers["x-razorpay-signature"];
+  
+      const expectedSignature = crypto
+        .createHmac(
+          "sha256",
+          process.env.RAZORPAY_WEBHOOK_SECRET
+        )
+        .update(JSON.stringify(req.body))
+        .digest("hex");
+  
+      if (signature !== expectedSignature) {
+        console.log("❌ Invalid Webhook Signature");
+  
+        return res.status(400).json({
+          success: false,
+          message: "Invalid webhook signature",
+        });
+      }
+  
+      const event = req.body;
+  
+      console.log("=======================================");
+      console.log("📨 Event:", event.event);
+      console.log("=======================================");
+  
+      switch (event.event) {
+        case "subscription.authenticated": {
+  
+          const subscription =
+            event.payload.subscription.entity;
+  
+          console.log("Subscription ID:", subscription.id);
+  
+          // Find Registration
+          const registration =
+            await prisma.registration.findFirst({
+              where: {
+                razorpaySubscriptionId: subscription.id,
+              },
+            });
+  
+          console.log("Registration Found:", registration);
+  
+          if (!registration) {
+            console.log("❌ Registration Not Found");
+  
+            return res.status(200).json({
+              success: true,
+              message: "Registration not found",
+            });
+          }
+  
+          // Check Existing Tenant
+          const existingTenant =
+            await prisma.tenant.findUnique({
+              where: {
+                email: registration.email,
+              },
+            });
+  
+          if (existingTenant) {
+            console.log("⚠️ Tenant Already Exists");
+  
+            return res.status(200).json({
+              success: true,
+              message: "Tenant already exists",
+            });
+          }
+  
+          // Transaction
+          const tenant = await prisma.$transaction(async (tx) => {
+  
+            const createdTenant =
+              await tx.tenant.create({
+                data: {
+                  name: registration.name,
                   email: registration.email,
+  
+                  companyName:
+                    registration.companyName,
+  
+                  companySlug:
+                    registration.companySlug,
+  
+                  adminUrl:
+                    `${registration.companySlug}.admin.crewmate.in`,
+  
+                  appUrl:
+                    `${registration.companySlug}.app.crewmate.in`,
+  
+                  selectedPlanId:
+                    registration.selectedPlanId,
+  
+                  selectedBillingCycle:
+                    registration.selectedBillingCycle,
+  
+                  status: "TRIAL",
+  
+                  isActive: true,
+  
+                  paymentAuthenticatedCompleted: true,
+  
+                  paymentAuthenticatedAt: new Date(),
+  
+                  signupAt:
+                    registration.createdAt,
                 },
               });
-            }
-      
-      res.status(200).json({ success: true });
+  
+            await tx.registration.delete({
+              where: {
+                email: registration.email,
+              },
+            });
+  
+            return createdTenant;
+          });
+  
+          console.log("=======================================");
+          console.log("✅ Tenant Created");
+          console.log("Tenant ID :", tenant.tenantId);
+          console.log("Email     :", tenant.email);
+          console.log("Company   :", tenant.companyName);
+          console.log("=======================================");
+  
+          break;
+        }
+  
+        case "payment.authorized":
+          console.log("💳 Payment Authorized");
+          break;
+  
+        case "refund.created":
+          console.log("💸 Refund Created");
+          break;
+  
+        case "refund.processed":
+          console.log("✅ Refund Processed");
+          break;
+  
+        default:
+          console.log("Unhandled Event:", event.event);
+      }
+  
+      return res.status(200).json({
+        success: true,
+      });
+  
     } catch (error) {
-      res.status(200).json({ success: false, error: error.message });
+  
+      console.error("=======================================");
+      console.error("❌ WEBHOOK ERROR");
+      console.error(error);
+      console.error("=======================================");
+  
+      return res.status(500).json({
+        success: false,
+        message: error.message,
+      });
     }
   });
+
+  // app.post('/api/v1/webhook', async (req, res) => {
+  //   try {
+  //     // ... signature verification ...
+  //           const signature = req.headers['x-razorpay-signature'];
+  //           const expectedSignature = crypto
+  //             .createHmac('sha256', "t8TasPW1A0zauajyfr0w2YQy")
+  //             .update(JSON.stringify(req.body))
+  //             .digest('hex');
+        
+  //           if (expectedSignature !== signature) {
+  //             console.log('❌ Invalid webhook signature');
+  //             return res.status(400).json({ 
+  //               success: false, 
+  //               message: 'Invalid signature' 
+  //             });
+  //           }
+        
+  //           const event = req.body;
+  //           console.log('📨 Webhook Received:', event.event);
+      
+  //           if (event.event === "subscription.authenticated") {
+
+  //             const razorpaySubscription = event.payload.subscription.entity;
+
+  //             console.log("Subscription ID:", razorpaySubscription.id);
+            
+  //             const registration = await prisma.registration.findFirst({
+  //                 where: {
+  //                   razorpaySubscriptionId: razorpaySubscription.id,
+  //                 },
+  //               });
+            
+  //             if (!registration) {
+  //               return res.status(200).json({
+  //                 success: true,
+  //                 message: "Registration not found",
+  //               });
+  //             }
+            
+  //             // Prevent duplicate tenant creation
+  //             const existingTenant = await prisma.tenant.findUnique({
+  //                 where: {
+  //                   email: registration.email,
+  //                 },
+  //               });
+            
+  //             if (existingTenant) {
+  //               return res.status(200).json({
+  //                 success: true,
+  //                 message: "Tenant already exists",
+  //               });
+  //             }
+            
+  //             const tenant = await prisma.tenant.create({
+  //                 data: {
+  //                   name: registration.name,
+  //                   email: registration.email,
+  //                   companyName: registration.companyName,
+  //                   companySlug: registration.companySlug,
+  //                   adminUrl: `${registration.companySlug}.admin.crewmate.in`,
+  //                   appUrl: `${registration.companySlug}.app.crewmate.in`,
+  //                   selectedPlanId: registration.selectedPlanId,
+  //                   selectedBillingCycle:  registration.selectedBillingCycle,
+  //                   status: "TRIAL",
+  //                   paymentAuthenticatedCompleted: true,
+  //                   signupAt:registration.createdAt,
+  //                   otpVerified: true,
+  //                   isActive: true,
+  //                 },
+  //               });
+            
+  //             console.log(
+  //               "✅ Tenant Created:",
+  //               tenant.tenantId
+  //             );
+            
+  //             // Optional: Mark registration completed
+  //             await prisma.registration.delete({
+  //               where: {
+  //                 email: registration.email,
+  //               },
+  //             });
+  //           }
+      
+  //     res.status(200).json({ success: true });
+  //   } catch (error) {
+  //     res.status(200).json({ success: false, error: error.message });
+  //   }
+  // });
 
 app.listen(9001,()=>(
     console.log("Crewmate Server Started.....")
