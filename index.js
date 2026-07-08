@@ -987,7 +987,7 @@ const subscription = await razorpay.subscriptions.create(
       const expectedSignature = crypto
         .createHmac(
           "sha256",
-          process.env.RAZORPAY_WEBHOOK_SECRET
+          "t8TasPW1A0zauajyfr0w2YQy"
         )
         .update(JSON.stringify(req.body))
         .digest("hex");
