@@ -1110,17 +1110,17 @@ const subscription = await razorpay.subscriptions.create(
           break;
         }
   
-        case "payment.authorized":
-          console.log("💳 Payment Authorized");
-          break;
+        // case "payment.authorized":
+        //   console.log("💳 Payment Authorized");
+        //   break;
   
-        case "refund.created":
-          console.log("💸 Refund Created");
-          break;
+        // case "refund.created":
+        //   console.log("💸 Refund Created");
+        //   break;
   
-        case "refund.processed":
-          console.log("✅ Refund Processed");
-          break;
+        // case "refund.processed":
+        //   console.log("✅ Refund Processed");
+        //   break;
   
         default:
           console.log("Unhandled Event:", event.event);
