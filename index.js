@@ -437,14 +437,129 @@ app.post("/api/v1/auth/login", async (req, res) => {
     }
   });
 
+  // app.post("/api/v1/signup", async (req, res) => {
+  //   try {
+  
+  //     const {
+  //       name,
+  //       email,
+  //       companyName,
+  //       companySlug
+  //     } = req.body;
+  
+  //     if (
+  //       !name ||
+  //       !email ||
+  //       !companyName ||
+  //       !companySlug
+  //     ) {
+  //       return res.status(400).json({
+  //         success: false,
+  //         message: "All fields are required"
+  //       });
+  //     }
+  
+  //     const slug = companySlug
+  //       .trim()
+  //       .toLowerCase()
+  //       .replace(/[^a-z0-9]/g, "");
+  
+  //     // Check email already exists in Tenant
+  //     const existingTenantEmail = await prisma.tenant.findUnique({
+  //         where: {
+  //           email
+  //         }
+  //       });
+  
+  //     if (existingTenantEmail) {
+  //       return res.status(400).json({
+  //         success: false,
+  //         message: "Account already exists"
+  //       });
+  //     }
+  
+  //     // Check slug already used by another tenant
+  //     const existingTenantSlug = await prisma.tenant.findUnique({
+  //         where: {
+  //           companySlug: slug
+  //         }
+  //       });
+  
+  //     if (existingTenantSlug) {
+  //       return res.status(400).json({
+  //         success: false,
+  //         message: "Slug already exists"
+  //       });
+  //     }
+
+  
+  
+  //     const otp = Math.floor(
+  //       100000 + Math.random() * 900000
+  //     ).toString();
+  
+  //     const expiresAt = new Date(
+  //       Date.now() + 15 * 60 * 1000
+  //     );
+  
+  //     await prisma.registration.upsert({
+  //       where: {
+  //         email
+  //       },
+  //       update: {
+  //         name,
+  //         companyName,
+  //         companySlug: slug,
+  //         otp,
+  //         otpVerified: false,
+  //         expiresAt
+  //       },
+  //       create: {
+  //         name,
+  //         email,
+  //         companyName,
+  //         companySlug: slug,
+  //         otp,
+  //         otpVerified: false,
+  //         expiresAt
+  //       }
+  //     });
+  
+  //     await resend.emails.send({
+  //       from: "noreply@crewmate.in",
+  //       to: email,
+  //       subject: "Your OTP Verification Code",
+  //       html: `
+  //         <h2>${otp}</h2>
+  //         <p>Your OTP is valid for 15 minutes.</p>
+  //       `
+  //     });
+  
+  //     return res.status(200).json({
+  //       success: true,
+  //       message: "OTP sent successfully"
+  //     });
+  
+  //   } catch (error) {
+  
+  //     console.error(error);
+  
+  //     return res.status(500).json({
+  //       success: false,
+  //       message: error.message
+  //     });
+  
+  //   }
+  // });
+
+
   app.post("/api/v1/signup", async (req, res) => {
     try {
-  
       const {
         name,
         email,
         companyName,
-        companySlug
+        companySlug,
       } = req.body;
   
       if (
@@ -455,98 +570,164 @@ app.post("/api/v1/auth/login", async (req, res) => {
       ) {
         return res.status(400).json({
           success: false,
-          message: "All fields are required"
+          message: "All fields are required",
         });
       }
+  
+      const cleanEmail = email.trim().toLowerCase();
   
       const slug = companySlug
         .trim()
         .toLowerCase()
         .replace(/[^a-z0-9]/g, "");
   
-      // Check email already exists in Tenant
-      const existingTenantEmail = await prisma.tenant.findUnique({
+      // ==============================
+      // Check Tenant Email
+      // ==============================
+      const existingTenantEmail =
+        await prisma.tenant.findUnique({
           where: {
-            email
-          }
+            email: cleanEmail,
+          },
         });
   
       if (existingTenantEmail) {
         return res.status(400).json({
           success: false,
-          message: "Account already exists"
+          message: "Account already exists. Please login.",
         });
       }
   
-      // Check slug already used by another tenant
-      const existingTenantSlug = await prisma.tenant.findUnique({
+      // ==============================
+      // Check Tenant Slug
+      // ==============================
+      const existingTenantSlug =  await prisma.tenant.findUnique({
           where: {
-            companySlug: slug
-          }
+            companySlug: slug,
+          },
         });
   
       if (existingTenantSlug) {
         return res.status(400).json({
           success: false,
-          message: "Slug already exists"
+          message: "Company slug already exists.",
         });
       }
   
-      const otp = Math.floor(
-        100000 + Math.random() * 900000
-      ).toString();
+      // ==============================
+      // Check Registration
+      // ==============================
+      const existingRegistration =  await prisma.registration.findUnique({
+          where: {
+            email: cleanEmail,
+          },
+        });
+  
+      // Generate OTP
+      const otp = Math.floor( 100000 + Math.random() * 900000 ).toString();
   
       const expiresAt = new Date(
         Date.now() + 15 * 60 * 1000
       );
   
-      await prisma.registration.upsert({
-        where: {
-          email
-        },
-        update: {
-          name,
-          companyName,
-          companySlug: slug,
-          otp,
-          otpVerified: false,
-          expiresAt
-        },
-        create: {
-          name,
-          email,
-          companyName,
-          companySlug: slug,
-          otp,
-          otpVerified: false,
-          expiresAt
-        }
-      });
+      // =====================================
+      // Existing Registration
+      // =====================================
+      if (existingRegistration) {
   
+
+  
+        // Check if another registration is using this slug
+        if (existingRegistration.companySlug !== slug) {
+          
+          const registrationSlug = await prisma.registration.findUnique({
+              where: {
+                companySlug: slug,
+              },
+            });
+  
+          if ( registrationSlug && registrationSlug.email !== cleanEmail ) {
+            
+            return res.status(400).json({
+              success: false,
+              message: "Company slug already exists.",
+            });
+          }
+        }
+  
+        // Update Registration
+        await prisma.registration.update({
+          where: {
+            email: cleanEmail,
+          },
+          data: {
+            name,
+            companyName,
+            companySlug: slug,
+            otp,
+            otpVerified: false,
+            expiresAt,
+          },
+        });
+  
+      } else {
+        // =====================================
+        // New Registration
+        // =====================================
+  
+        // Check Registration Slug
+        const registrationSlug =
+          await prisma.registration.findUnique({
+            where: {
+              companySlug: slug,
+            },
+          });
+  
+        if (registrationSlug) {
+          return res.status(400).json({
+            success: false,
+            message: "Company slug already exists.",
+          });
+        }
+  
+        await prisma.registration.create({
+          data: {
+            name,
+            email: cleanEmail,
+            companyName,
+            companySlug: slug,
+            otp,
+            otpVerified: false,
+            expiresAt,
+          },
+        });
+      }
+  
+      // ==============================
+      // Send OTP Email
+      // ==============================
       await resend.emails.send({
         from: "noreply@crewmate.in",
-        to: email,
+        to: cleanEmail,
         subject: "Your OTP Verification Code",
         html: `
           <h2>${otp}</h2>
           <p>Your OTP is valid for 15 minutes.</p>
-        `
+        `,
       });
   
       return res.status(200).json({
         success: true,
-        message: "OTP sent successfully"
+        message: "OTP sent successfully.",
       });
   
     } catch (error) {
-  
-      console.error(error);
+      console.error("Signup Error:", error);
   
       return res.status(500).json({
         success: false,
-        message: error.message
+        message: error.message,
       });
-  
     }
   });
 
